@@ -467,6 +467,47 @@ export const getProfiles = async (): Promise<any[]> => {
     }));
 };
 
+export const registerUser = async (profile: any, password: string) => {
+    // 1. Sign up the user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: profile.email,
+        password: password,
+        options: {
+            data: {
+                full_name: profile.name,
+            }
+        }
+    });
+
+    if (authError) throw authError;
+    if (!authData.user) throw new Error("Falha ao criar utilizador Auth.");
+
+    // 2. Create the profile in the profiles table
+    const dbProfile = {
+        id: authData.user.id,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        fraction_code: profile.fractionCode
+    };
+
+    const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .insert(dbProfile)
+        .select()
+        .single();
+
+    if (profileError) throw profileError;
+
+    return {
+        id: profileData.id,
+        name: profileData.name,
+        email: profileData.email,
+        role: profileData.role,
+        fractionCode: profileData.fraction_code
+    };
+};
+
 // Nota: Em Supabase, criar um utilizador normalmente requer Auth.
 // Aqui vamos apenas criar o registo na tabela profiles para que apareça na lista.
 // O utilizador real teria de se registar ou ser convidado via Auth Admin (que não está disponível no client-side sem edge functions).

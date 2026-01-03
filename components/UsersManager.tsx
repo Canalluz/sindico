@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { getProfiles, updateProfile, deleteProfile } from '../services/supabaseService';
+import { getProfiles, updateProfile, deleteProfile, registerUser } from '../services/supabaseService';
 
 interface UsersManagerProps {
   user: User; // Utilizador atual logado
@@ -14,6 +14,7 @@ const UsersManager: React.FC<UsersManagerProps> = ({ user: currentUser }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [password, setPassword] = useState('');
 
   const isAdmin = currentUser.role === 'ADMIN';
 
@@ -50,10 +51,10 @@ const UsersManager: React.FC<UsersManagerProps> = ({ user: currentUser }) => {
   });
 
   const handleOpenAdd = () => {
-    // setEditingUser(null);
-    // setFormData({ name: '', email: '', role: 'RESIDENT', fractionCode: '' });
-    // setShowModal(true);
-    alert("⚠️ Funcionalidade Limitada: Para adicionar novos utilizadores, eles devem registar-se na aplicação ou ser convidados via Supabase Dashboard. Esta funcionalidade será implementada em breve com Edge Functions. Por favor, peça ao utilizador para se registar.");
+    setEditingUser(null);
+    setFormData({ name: '', email: '', role: 'RESIDENT', fractionCode: '' });
+    setPassword('');
+    setShowModal(true);
   };
 
   const handleOpenEdit = (userToEdit: User) => {
@@ -97,10 +98,17 @@ const UsersManager: React.FC<UsersManagerProps> = ({ user: currentUser }) => {
         setUsers(prev => prev.map(u => String(u.id) === String(editingUser.id) ? updated : u));
         showToast("Perfil atualizado com sucesso.");
       } else {
-        // Create logic disabled for now as per alert
+        if (!password) {
+          showToast("A senha é obrigatória para novos utilizadores.", 'error');
+          return;
+        }
+        const newUser = await registerUser(formData, password);
+        setUsers(prev => [...prev, newUser]);
+        showToast("Utilizador criado com sucesso.");
       }
       setShowModal(false);
       setEditingUser(null);
+      setPassword('');
     } catch (error) {
       console.error('Erro ao salvar utilizador:', error);
       showToast('Erro ao salvar alterações.', 'error');
@@ -137,8 +145,8 @@ const UsersManager: React.FC<UsersManagerProps> = ({ user: currentUser }) => {
               </button>
               <button
                 onClick={handleOpenAdd}
-                className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center gap-2 opacity-50 cursor-not-allowed"
-                title="Funcionalidade em desenvolvimento (Requer convite via Auth)"
+                className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 dark:shadow-none flex items-center gap-2"
+                title="Adicionar novo utilizador"
               >
                 <span>+</span> Novo Utilizador
               </button>
@@ -266,14 +274,31 @@ const UsersManager: React.FC<UsersManagerProps> = ({ user: currentUser }) => {
 
               {/* Email is read-only for now as we can't easily change auth email via simple update */}
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest ml-1">Email Principal (Apenas Leitura)</label>
+                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest ml-1">Email Principal {editingUser && '(Apenas Leitura)'}</label>
                 <input
                   type="email"
                   value={formData.email}
-                  disabled
-                  className="w-full bg-slate-100 dark:bg-slate-800/50 border-2 border-transparent rounded-2xl px-5 py-4 text-sm text-slate-500 dark:text-slate-500 transition-all outline-none cursor-not-allowed"
+                  disabled={!!editingUser}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className={`w-full ${editingUser ? 'bg-slate-100 dark:bg-slate-800/50 cursor-not-allowed' : 'bg-slate-50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-100 dark:focus:border-indigo-900'} border-2 border-transparent rounded-2xl px-5 py-4 text-sm font-bold text-slate-800 dark:text-amber-100 transition-all outline-none`}
+                  placeholder="email@exemplo.com"
+                  required
                 />
               </div>
+
+              {!editingUser && (
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest ml-1">Senha Inicial</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-100 dark:focus:border-indigo-900 focus:bg-white dark:focus:bg-slate-900 rounded-2xl px-5 py-4 text-sm font-bold text-slate-800 dark:text-amber-100 transition-all outline-none"
+                    placeholder="Mínimo 6 caracteres"
+                    required={!editingUser}
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
