@@ -1,0 +1,145 @@
+
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+import Navigation from './components/Navigation';
+import Login from './components/Login';
+import { User } from './types';
+import { MOCK_SYSTEM_USERS } from './constants';
+
+import { supabase } from './supabase';
+import { getCurrentUserProfile, signOut } from './services/supabaseService';
+
+// Lazy load all route components for code splitting
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Building = lazy(() => import('./components/Building'));
+const Fractions = lazy(() => import('./components/Fractions'));
+const Finance = lazy(() => import('./components/Finance'));
+const Maintenance = lazy(() => import('./components/Maintenance'));
+const Assemblies = lazy(() => import('./components/Assemblies'));
+const LegalAssistant = lazy(() => import('./components/LegalAssistant'));
+const Occurrences = lazy(() => import('./components/Occurrences'));
+const CommonAreas = lazy(() => import('./components/CommonAreas'));
+const Security = lazy(() => import('./components/Security'));
+const StaffManager = lazy(() => import('./components/StaffManager'));
+const UsersManager = lazy(() => import('./components/UsersManager'));
+
+const App: React.FC = () => {
+  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [user, setUser] = useState<User | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('seo-gestao-theme');
+    if (saved) return saved as 'light' | 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  //   const [systemUsers, setSystemUsers] = useState<User[]>(() => {
+  //     const saved = localStorage.getItem('condogest_users');
+  //     return saved ? JSON.parse(saved) : MOCK_SYSTEM_USERS;
+  //   });
+
+  useEffect(() => {
+    // Verificar sessão atual
+    getCurrentUserProfile().then(setUser);
+
+    // Ouvir mudanças de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN') {
+        const profile = await getCurrentUserProfile();
+        setUser(profile);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setCurrentTab('dashboard');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
+    localStorage.setItem('seo-gestao-theme', theme);
+  }, [theme]);
+
+  //   useEffect(() => {
+  //     localStorage.setItem('condogest_users', JSON.stringify(systemUsers));
+  //   }, [systemUsers]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
+  const handleLogout = async () => {
+    await signOut(); // O listener vai limpar o estado
+  };
+
+  const renderContent = () => {
+    if (!user) return null;
+
+    switch (currentTab) {
+      case 'dashboard': return <Dashboard />;
+      case 'building': return <Building />;
+      case 'fractions': return <Fractions user={user} />;
+      case 'users': return (
+        <UsersManager
+          user={user}
+        />
+      );
+      case 'finance': return <Finance user={user} />;
+      case 'reservations': return <CommonAreas user={user} />;
+      case 'maintenance': return <Maintenance user={user} />;
+      case 'security': return <Security user={user} />;
+      case 'staff': return <StaffManager user={user} />;
+      case 'occurrences': return <Occurrences />;
+      case 'assemblies': return <Assemblies user={user} />;
+      case 'ai-legal': return <LegalAssistant />;
+      default: return <Dashboard />;
+    }
+  };
+
+  if (!user) {
+    return <Login onLogin={() => { }} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row font-sans selection:bg-indigo-100 selection:text-indigo-700 transition-colors duration-500">
+      <Navigation
+        currentTab={currentTab}
+        setTab={setCurrentTab}
+        user={user}
+        onLogout={handleLogout}
+        theme={theme}
+        toggleTheme={toggleTheme}
+      />
+
+      <main className="flex-1 p-4 md:p-10 max-w-7xl mx-auto w-full overflow-x-hidden">
+        <div className="text-slate-900 dark:text-slate-100 transition-colors duration-500">
+          <Suspense fallback={
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          }>
+            {renderContent()}
+          </Suspense>
+        </div>
+      </main>
+
+      <div className="fixed bottom-6 right-6 hidden md:block z-[60]">
+        <button className="bg-white dark:bg-slate-800 p-4 rounded-full shadow-2xl border border-slate-100 dark:border-slate-700 hover:scale-110 transition-all group relative">
+          <span className="text-2xl">🇵🇹</span>
+          <div className="absolute right-14 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-[10px] px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-bold uppercase tracking-widest pointer-events-none shadow-xl">
+            Suporte Portugal 24h
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default App;
