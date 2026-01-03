@@ -423,15 +423,46 @@ export const signOut = async () => {
     if (error) throw error;
 };
 
-export const getCurrentUserProfile = async (): Promise<any> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+export const getCurrentUserProfile = async (providedUser?: any): Promise<any> => {
+    console.log('supabaseService: getCurrentUserProfile started');
+    let user = providedUser;
 
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (!user) {
+        console.log('supabaseService: No user provided, checking session...');
+        // getSession is usually faster and less likely to hang than getUser on the client
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) console.error('supabaseService: getSession error:', sessionError);
+        user = session?.user;
+    }
 
-    if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
+    console.log('supabaseService: auth user:', user?.email);
+
+    if (!user) {
+        console.log('supabaseService: No user found, returning null');
         return null;
+    }
+
+    console.log('supabaseService: Fetching profile from DB for ID:', user.id);
+
+    // Usar um timeout para evitar bloqueio infinito se a DB/RLS estiver a falhar
+    const fetchProfilePromise = supabase.from('profiles').select('*').eq('id', user.id);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout fetching profile')), 5000));
+
+    let data = null;
+    let error: any = null;
+
+    try {
+        const result: any = await Promise.race([fetchProfilePromise, timeoutPromise]);
+        data = result.data?.[0]; // Pega o primeiro se existir
+        error = result.error;
+        console.log('supabaseService: DB fetch finished. Data:', !!data, 'Error:', error?.message);
+    } catch (err: any) {
+        console.error('supabaseService: Profile fetch timed out or failed:', err.message);
+        error = { message: err.message };
+    }
+
+    if (error && error.code !== 'PGRST116' && !error.message?.includes('Timeout')) {
+        console.error('Error fetching profile:', error);
     }
 
     if (data) {
@@ -444,13 +475,17 @@ export const getCurrentUserProfile = async (): Promise<any> => {
         };
     }
 
-    // Fallback se não houver perfil criado manualmente
+    console.log('supabaseService: Using fallback profile for', user.email);
+    // Fallback se não houver perfil ou se o fetch falhar
+    // SEO Gestão Admin fallback especial se o email for o do admin
+    const isAdmin = user.email === 'seo@gestao.com';
+
     return {
         id: user.id,
-        name: user.email?.split('@')[0] || 'Utilizador',
+        name: isAdmin ? 'SEO Gestão (Admin)' : (user.email?.split('@')[0] || 'Utilizador'),
         email: user.email,
-        role: 'RESIDENT', // Default
-        fractionCode: ''
+        role: isAdmin ? 'ADMIN' : 'RESIDENT',
+        fractionCode: isAdmin ? 'ADMIN' : ''
     };
 };
 

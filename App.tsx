@@ -37,21 +37,38 @@ const App: React.FC = () => {
   //   });
 
   useEffect(() => {
+    let isMounted = true;
+    console.log('App: Auth useEffect mounted');
+
     // Verificar sessão atual
-    getCurrentUserProfile().then(setUser);
+    console.log('App: Checking current session...');
+    getCurrentUserProfile().then(profile => {
+      if (isMounted) {
+        console.log('App: Initial profile loaded:', profile?.email);
+        setUser(profile);
+      }
+    });
 
     // Ouvir mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('App: Auth state change:', event, session?.user?.email);
       if (event === 'SIGNED_IN') {
-        const profile = await getCurrentUserProfile();
-        setUser(profile);
+        const profile = await getCurrentUserProfile(session?.user);
+        if (isMounted) {
+          console.log('App: Profile updated after SIGNED_IN:', profile?.email);
+          setUser(profile);
+        }
       } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setCurrentTab('dashboard');
+        if (isMounted) {
+          console.log('App: User signed out');
+          setUser(null);
+          setCurrentTab('dashboard');
+        }
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);

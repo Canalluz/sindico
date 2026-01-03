@@ -34,9 +34,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      await signIn(email, password);
+      console.log('Login: Attempting sign in for', email);
+      const user = await signIn(email, password);
+      console.log('Login: Sign in successful for', user?.email);
       // O App.tsx vai detetar a mudança de estado e atualizar o utilizador
     } catch (err: any) {
+      console.error('Login: error during sign in:', err);
       console.error('Login error:', err);
       setError('Credenciais inválidas ou erro de ligação.');
     } finally {
