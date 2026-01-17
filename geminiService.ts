@@ -1,10 +1,23 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Use a safe way to access environment variables in Vite
+const API_KEY = typeof process !== 'undefined' && process.env ? process.env.API_KEY || process.env.VITE_GEMINI_API_KEY : import.meta.env.VITE_GEMINI_API_KEY;
+
+let ai: any = null;
+try {
+  if (API_KEY) {
+    ai = new GoogleGenAI({ apiKey: API_KEY });
+  } else {
+    console.warn("Gemini API Key missing. AI features will be disabled.");
+  }
+} catch (err) {
+  console.error("Failed to initialize GoogleGenAI:", err);
+}
 
 export const getLegalAdvice = async (query: string) => {
   try {
+    if (!ai) return "Assistente jurídico não disponível no momento (API Key em falta).";
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: query,
@@ -38,6 +51,7 @@ export const generateMeetingNotice = async (title: string, date: string, time: s
     4. Informação sobre a segunda convocatória (caso não haja quórum na primeira).
     5. Menção à obrigatoriedade do Fundo de Reserva.`;
 
+    if (!ai) return "Serviço de IA não disponível.";
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -87,6 +101,7 @@ export const generateMinutes = async (assemblyData: any) => {
     - Menciona que a ata foi lida e aprovada por todos os presentes.
     - Inclui espaço para assinaturas no final.`;
 
+    if (!ai) return "Serviço de IA não disponível para gerar ata.";
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,

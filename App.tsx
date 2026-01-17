@@ -9,12 +9,13 @@ import { supabase } from './supabase';
 import { getCurrentUserProfile, signOut } from './services/supabaseService';
 
 // Lazy load all route components for code splitting
+import Assemblies from './components/Assemblies';
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const Building = lazy(() => import('./components/Building'));
 const Fractions = lazy(() => import('./components/Fractions'));
 const Finance = lazy(() => import('./components/Finance'));
 const Maintenance = lazy(() => import('./components/Maintenance'));
-const Assemblies = lazy(() => import('./components/Assemblies'));
+// const Assemblies = lazy(() => import('./components/Assemblies'));
 const LegalAssistant = lazy(() => import('./components/LegalAssistant'));
 const Occurrences = lazy(() => import('./components/Occurrences'));
 const CommonAreas = lazy(() => import('./components/CommonAreas'));
@@ -99,24 +100,35 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (!user) return null;
 
-    switch (currentTab) {
-      case 'dashboard': return <Dashboard />;
-      case 'building': return <Building />;
-      case 'fractions': return <Fractions user={user} />;
-      case 'users': return (
-        <UsersManager
-          user={user}
-        />
+    try {
+      switch (currentTab) {
+        case 'dashboard': return <Dashboard />;
+        case 'building': return <Building />;
+        case 'fractions': return <Fractions user={user} />;
+        case 'users': return (
+          <UsersManager
+            user={user}
+          />
+        );
+        case 'finance': return <Finance user={user} />;
+        case 'reservations': return <CommonAreas user={user} />;
+        case 'maintenance': return <Maintenance user={user} />;
+        case 'security': return <Security user={user} />;
+        case 'staff': return <StaffManager user={user} />;
+        case 'occurrences': return <Occurrences />;
+        case 'assemblies': return <Assemblies user={user} />;
+        case 'ai-legal': return <LegalAssistant />;
+        default: return <Dashboard />;
+      }
+    } catch (err) {
+      console.error('App: Error rendering tab:', currentTab, err);
+      return (
+        <div className="p-10 bg-rose-50 border border-rose-200 rounded-3xl text-rose-800">
+          <h2 className="text-xl font-bold mb-2">Erro ao carregar componente</h2>
+          <p className="text-sm">Ocorreu um erro ao carregar a página <strong>{currentTab}</strong>. Verifique a consola para mais detalhes.</p>
+          <button onClick={() => setCurrentTab('dashboard')} className="mt-4 px-4 py-2 bg-rose-600 text-white rounded-xl font-bold">Voltar ao Painel</button>
+        </div>
       );
-      case 'finance': return <Finance user={user} />;
-      case 'reservations': return <CommonAreas user={user} />;
-      case 'maintenance': return <Maintenance user={user} />;
-      case 'security': return <Security user={user} />;
-      case 'staff': return <StaffManager user={user} />;
-      case 'occurrences': return <Occurrences />;
-      case 'assemblies': return <Assemblies user={user} />;
-      case 'ai-legal': return <LegalAssistant />;
-      default: return <Dashboard />;
     }
   };
 
@@ -124,11 +136,16 @@ const App: React.FC = () => {
     return <Login onLogin={() => { }} />;
   }
 
+  console.log('App: Rendering. currentTab:', currentTab, 'user:', !!user);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row font-sans selection:bg-indigo-100 selection:text-indigo-700 transition-colors duration-500">
       <Navigation
         currentTab={currentTab}
-        setTab={setCurrentTab}
+        setTab={(tab) => {
+          console.log('App: Switching tab to:', tab);
+          setCurrentTab(tab);
+        }}
         user={user}
         onLogout={handleLogout}
         theme={theme}

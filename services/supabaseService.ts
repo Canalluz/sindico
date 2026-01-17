@@ -4,18 +4,29 @@ import { TransactionType } from '../types';
 
 // --- Frações ---
 export const getFractions = async (): Promise<Fraction[]> => {
-    const { data, error } = await supabase.from('fractions').select('*').order('code');
-    if (error) throw error;
+    try {
+        const fetchPromise = supabase.from('fractions').select('*').order('code');
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout fetching fractions')), 8000));
 
-    return data.map((f: any) => ({
-        id: f.id,
-        code: f.code,
-        ownerName: f.owner_name,
-        permilage: f.permilage,
-        monthlyQuota: f.monthly_quota,
-        nif: f.nif,
-        status: f.status
-    }));
+        const result: any = await Promise.race([fetchPromise, timeoutPromise]);
+        const { data, error } = result;
+
+        if (error) throw error;
+        if (!data) return [];
+
+        return data.map((f: any) => ({
+            id: f.id,
+            code: f.code,
+            ownerName: f.owner_name,
+            permilage: f.permilage,
+            monthlyQuota: f.monthly_quota,
+            nif: f.nif,
+            status: f.status
+        }));
+    } catch (err) {
+        console.error('Error in getFractions:', err);
+        return [];
+    }
 };
 
 export const createFraction = async (fraction: Omit<Fraction, 'id'>): Promise<Fraction> => {
@@ -331,21 +342,32 @@ export const createBooking = async (booking: Omit<Booking, 'id'>): Promise<Booki
 
 // --- Assembleias ---
 export const getAssemblies = async (): Promise<Assembly[]> => {
-    const { data, error } = await supabase.from('assemblies').select('*').order('date', { ascending: false });
-    if (error) throw error;
+    try {
+        const fetchPromise = supabase.from('assemblies').select('*').order('date', { ascending: false });
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout fetching assemblies')), 8000));
 
-    return data.map((a: any) => ({
-        id: a.id,
-        title: a.title,
-        date: a.date,
-        time: a.time,
-        location: a.location,
-        type: a.type,
-        status: a.status,
-        noticeText: a.notice_text,
-        minutesText: a.minutes_text,
-        resolutions: a.resolutions
-    }));
+        const result: any = await Promise.race([fetchPromise, timeoutPromise]);
+        const { data, error } = result;
+
+        if (error) throw error;
+        if (!data) return [];
+
+        return data.map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            date: a.date,
+            time: a.time,
+            location: a.location,
+            type: a.type,
+            status: a.status,
+            noticeText: a.notice_text,
+            minutesText: a.minutes_text,
+            resolutions: a.resolutions
+        }));
+    } catch (err) {
+        console.error('Error in getAssemblies:', err);
+        return [];
+    }
 };
 
 export const createAssembly = async (assembly: Omit<Assembly, 'id'>): Promise<Assembly> => {

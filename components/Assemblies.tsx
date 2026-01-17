@@ -18,7 +18,8 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
   const [activeAssembly, setActiveAssembly] = useState<Assembly | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [draftResult, setDraftResult] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [viewingNotice, setViewingNotice] = useState<Assembly | null>(null);
   const [viewingMinutes, setViewingMinutes] = useState<Assembly | null>(null);
   const [viewingContext, setViewingContext] = useState<Assembly | null>(null);
@@ -41,21 +42,25 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
   });
 
   useEffect(() => {
+    console.log('Assemblies: useEffect mounted');
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
+      console.log('Assemblies: Starting loadData...');
       const [assData, fracData] = await Promise.all([
-        getAssemblies(),
-        getFractions()
+        getAssemblies().catch(e => { console.error('getAssemblies fail:', e); return []; }),
+        getFractions().catch(e => { console.error('getFractions fail:', e); return []; })
       ]);
-      setAssemblies(assData);
-      setFractions(fracData);
+      console.log('Assemblies: loadData finished. assData:', !!assData, 'fracData:', !!fracData);
+      setAssemblies(Array.isArray(assData) ? assData : []);
+      setFractions(Array.isArray(fracData) ? fracData : []);
     } catch (error) {
-      console.error('Erro ao carregar assembleias:', error);
+      console.error('Assemblies: critical error in loadData:', error);
     } finally {
-      setLoading(false);
+      console.log('Assemblies: setting initialLoading to false');
+      setInitialLoading(false);
     }
   };
 
@@ -198,6 +203,8 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
     }
   };
 
+  console.log('Assemblies: Rendering body. initialLoading:', initialLoading, 'assemblies count:', assemblies.length);
+
   return (
     <div className="animate-fadeIn space-y-6">
       <div className="flex justify-between items-center">
@@ -220,7 +227,13 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
           <h3 className="font-black text-slate-800 dark:text-amber-200 text-lg mb-4 flex items-center gap-2 transition-colors">
             <span>📅</span> Sessões Agendadas
           </h3>
-          {assemblies.length === 0 ? (
+
+          {initialLoading ? (
+            <div className="flex flex-col items-center justify-center p-20 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">A carregar sessões...</p>
+            </div>
+          ) : assemblies.length === 0 ? (
             <div className="bg-white dark:bg-slate-900 p-20 rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800 text-center text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest text-xs transition-colors">
               Sem registos
             </div>
@@ -242,7 +255,7 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
                         <span className="text-xs font-black text-slate-800 dark:text-amber-100 transition-colors">{a.title}</span>
                       </div>
                       <p className="text-xs text-slate-400 dark:text-slate-500 font-medium transition-colors">
-                        📅 {new Date(a.date).toLocaleDateString('pt-PT')}
+                        📅 {a.date ? new Date(a.date).toLocaleDateString('pt-PT') : 'Data não definida'}
                       </p>
                     </div>
                   </div>
@@ -284,8 +297,112 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
               Utilize o <strong>Resumo</strong> para consultar votações rápidas (Sim/Não) sem abrir o documento formal.
             </p>
           </div>
+          {isAdmin && assemblies.length > 0 && !initialLoading && (
+            <div className="relative z-10 pt-10">
+              <button
+                onClick={() => setViewingNotice(assemblies[0])}
+                className="w-full text-center py-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all text-xs font-bold uppercase tracking-widest"
+              >
+                Ver Última Convocatória
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Modal Convocar Assembleia */}
+      {showForm && isAdmin && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[150] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl max-w-4xl w-full p-10 animate-scaleIn border border-slate-100 dark:border-slate-800 transition-colors">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h3 className="text-2xl font-black text-slate-800 dark:text-amber-200 tracking-tight transition-colors">Nova Convocatória</h3>
+                <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">Preencha os dados da assembleia</p>
+              </div>
+              <button onClick={resetForm} className="w-10 h-10 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-rose-500 rounded-full font-bold transition-colors">✕</button>
+            </div>
+
+            {!drafting ? (
+              <form onSubmit={handleGenerateNotice} className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400">Título</label>
+                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-2xl px-5 py-4 font-bold text-slate-800 dark:text-amber-50 outline-none transition-colors" required />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400">Tipo</label>
+                    <select value={type} onChange={e => setType(e.target.value as any)} className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-2xl px-5 py-4 font-bold text-slate-800 dark:text-amber-50 outline-none transition-colors">
+                      <option value="ORDINARY">Ordinária</option>
+                      <option value="EXTRAORDINARY">Extraordinária</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400">Data</label>
+                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-2xl px-5 py-4 font-bold text-slate-800 dark:text-amber-50 outline-none transition-colors" required />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400">Hora</label>
+                    <input type="time" value={time} onChange={e => setTime(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-2xl px-5 py-4 font-bold text-slate-800 dark:text-amber-50 outline-none transition-colors" required />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400">Local</label>
+                    <input type="text" value={location} onChange={e => setLocation(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-2xl px-5 py-4 font-bold text-slate-800 dark:text-amber-50 outline-none transition-colors" required />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400">Ordem do Dia (Ponto por linha)</label>
+                  <textarea value={agenda} onChange={e => setAgenda(e.target.value)} rows={4} className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-2xl px-5 py-4 font-bold text-slate-800 dark:text-amber-50 outline-none transition-colors" placeholder="1. Aprovação de contas&#10;2. Eleição de órgãos" required />
+                </div>
+                <button type="submit" disabled={loading} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all">
+                  {loading ? 'A PROCESSAR...' : 'Gerar Texto da Convocatória (IA)'}
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-6">
+                <div className="bg-slate-50 dark:bg-slate-950 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 max-h-[40vh] overflow-y-auto custom-scrollbar">
+                  <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{draftResult}</pre>
+                </div>
+                <div className="flex gap-4">
+                  <button onClick={() => setDrafting(false)} className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-amber-200 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all">Editar Dados</button>
+                  <button onClick={confirmAndSchedule} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg hover:bg-emerald-700 transition-all">Confirmar e Agendar</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ver Ata */}
+      {viewingMinutes && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl max-w-4xl w-full p-10 animate-scaleIn border border-slate-100 dark:border-slate-800 transition-colors">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-2xl font-black text-slate-800 dark:text-amber-200">Ata de Assembleia</h3>
+              <button onClick={() => setViewingMinutes(null)} className="w-10 h-10 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-rose-500 rounded-full font-bold transition-colors">✕</button>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-950 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{viewingMinutes.minutesText || 'Texto da ata não disponível.'}</pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ver Convocatória */}
+      {viewingNotice && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl max-w-4xl w-full p-10 animate-scaleIn border border-slate-100 dark:border-slate-800 transition-colors">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-2xl font-black text-slate-800 dark:text-amber-200">Convocatória Oficial</h3>
+              <button onClick={() => setViewingNotice(null)} className="w-10 h-10 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-rose-500 rounded-full font-bold transition-colors">✕</button>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-950 p-8 rounded-3xl border border-slate-100 dark:border-slate-800 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{viewingNotice.noticeText || 'Texto da convocatória não disponível.'}</pre>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Visualizar Contexto (Resumo) */}
       {viewingContext && (
@@ -300,26 +417,30 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
             </div>
 
             <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
-              {viewingContext.resolutions?.map((res, idx) => (
-                <div key={idx} className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 transition-colors">
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="text-base font-black text-slate-800 dark:text-amber-50 transition-colors">{res.pointTitle}</h4>
-                    <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors ${res.status === 'APPROVED' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
-                      {res.status === 'APPROVED' ? 'Aprovado' : 'Rejeitado'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-                    <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center transition-colors">
-                      <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Favor</p>
-                      <p className="text-lg font-black text-slate-800 dark:text-amber-100 transition-colors">{res.votesFor}</p>
+              {viewingContext.resolutions && viewingContext.resolutions.length > 0 ? (
+                viewingContext.resolutions.map((res, idx) => (
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-950 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 transition-colors">
+                    <div className="flex justify-between items-start mb-4">
+                      <h4 className="text-base font-black text-slate-800 dark:text-amber-50 transition-colors">{res.pointTitle}</h4>
+                      <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-colors ${res.status === 'APPROVED' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+                        {res.status === 'APPROVED' ? 'Aprovado' : 'Rejeitado'}
+                      </span>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center transition-colors">
-                      <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest">Contra</p>
-                      <p className="text-lg font-black text-slate-800 dark:text-amber-100 transition-colors">{res.votesAgainst}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center transition-colors">
+                        <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Favor</p>
+                        <p className="text-lg font-black text-slate-800 dark:text-amber-100 transition-colors">{res.votesFor}</p>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-center transition-colors">
+                        <p className="text-[8px] font-black text-rose-500 uppercase tracking-widest">Contra</p>
+                        <p className="text-lg font-black text-slate-800 dark:text-amber-100 transition-colors">{res.votesAgainst}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-center py-10 text-slate-400 font-bold uppercase tracking-widest text-xs">Sem resoluções registadas</div>
+              )}
             </div>
           </div>
         </div>
@@ -338,12 +459,81 @@ const Assemblies: React.FC<AssembliesProps> = ({ user }) => {
             </div>
 
             <div className="space-y-12 overflow-y-auto max-h-[70vh] pr-4 custom-scrollbar">
-              {/* Conteúdo do formulário de ata... */}
               <div className="bg-slate-50 dark:bg-slate-950 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-6 transition-colors">
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest transition-colors">Presidente da Mesa</label>
                   <input type="text" value={minutesData.presidentName} onChange={(e) => setMinutesData({ ...minutesData, presidentName: e.target.value })} className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-amber-50 rounded-xl px-4 py-3 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-colors" />
                 </div>
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest transition-colors">Secretário</label>
+                  <input type="text" value={minutesData.secretaryName} onChange={(e) => setMinutesData({ ...minutesData, secretaryName: e.target.value })} className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-amber-50 rounded-xl px-4 py-3 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-colors" placeholder="Nome do secretário" />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest transition-colors">Hora de Fim</label>
+                  <input type="time" value={minutesData.endTime} onChange={(e) => setMinutesData({ ...minutesData, endTime: e.target.value })} className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-amber-50 rounded-xl px-4 py-3 text-sm font-bold border-none outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-colors" />
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h4 className="text-lg font-black text-slate-800 dark:text-amber-200 uppercase tracking-tighter">Participação das Frações</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {fractions.map(f => {
+                    const isAttending = minutesData.attendees.some(a => a.fractionCode === f.code);
+                    return (
+                      <button
+                        key={f.id}
+                        onClick={() => addAttendee(f.id)}
+                        className={`p-4 rounded-2xl border text-left transition-all ${isAttending
+                          ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg'
+                          : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                      >
+                        <p className="text-[10px] font-black uppercase opacity-60">Fração</p>
+                        <p className="text-sm font-bold">{f.code}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                <h4 className="text-lg font-black text-slate-800 dark:text-amber-200 uppercase tracking-tighter">Deliberações</h4>
+                {minutesData.resolutions.map((res, idx) => (
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-950 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 space-y-4">
+                    <p className="text-sm font-black text-indigo-600">PONT {idx + 1}: {res.pointTitle}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <textarea
+                        placeholder="Descrição da proposta..."
+                        value={res.proposalDescription}
+                        onChange={e => handleResolutionChange(idx, 'proposalDescription', e.target.value)}
+                        className="bg-white dark:bg-slate-900 p-4 rounded-xl text-xs font-medium border-none outline-none min-h-[100px]"
+                      />
+                      <textarea
+                        placeholder="Resumo da discussão..."
+                        value={res.discussionSummary}
+                        onChange={e => handleResolutionChange(idx, 'discussionSummary', e.target.value)}
+                        className="bg-white dark:bg-slate-900 p-4 rounded-xl text-xs font-medium border-none outline-none min-h-[100px]"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="text-[9px] font-bold uppercase text-slate-400">Votos Favor</label>
+                        <input type="number" value={res.votesFor} onChange={e => handleResolutionChange(idx, 'votesFor', parseInt(e.target.value))} className="w-full bg-white dark:bg-slate-900 p-3 rounded-lg text-sm font-bold border-none" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold uppercase text-slate-400">Votos Contra</label>
+                        <input type="number" value={res.votesAgainst} onChange={e => handleResolutionChange(idx, 'votesAgainst', parseInt(e.target.value))} className="w-full bg-white dark:bg-slate-900 p-3 rounded-lg text-sm font-bold border-none" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold uppercase text-slate-400">Resultado</label>
+                        <select value={res.status} onChange={e => handleResolutionChange(idx, 'status', e.target.value)} className="w-full bg-white dark:bg-slate-900 p-3 rounded-lg text-sm font-bold border-none">
+                          <option value="APPROVED">Aprovado</option>
+                          <option value="REJECTED">Rejeitado</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="pt-8 flex flex-col gap-4">
